@@ -2,10 +2,11 @@
 #ifndef S22442_CURRENCY_CONVERTER_H
 #define S22442_CURRENCY_CONVERTER_H
 
-#include <cpr/cpr.h>
-#include <fort.hpp>
-#include <nlohmann/json.hpp>
-#include <termcolor/termcolor.hpp>
+#include <cpr/cpr.h>  // https://github.com/whoshuu/cpr
+#include <fort.hpp>   // https://github.com/seleznevae/libfort
+#include <math.h>
+#include <nlohmann/json.hpp>        // https://github.com/nlohmann/json
+#include <termcolor/termcolor.hpp>  // https://github.com/ikalnytskyi/termcolor
 
 #include <iostream>
 #include <map>
@@ -22,11 +23,12 @@ struct currency_converter {
   private:
     cpr::Url const NBP_URL =
         "api.nbp.pl/api/exchangerates/tables/a?format=json";
-    std::map<std::string, cpr::Url> CURRENCY_NAMES_URLS{
-        {"en", "openexchangerates.org/api/currencies.json"}};
+    std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
+        {"EN", "openexchangerates.org/api/currencies.json"}};
+    std::string const DEFAULT_LANGUAGE = "EN";
 
-    json exchange_rates;
-    json currency_names;
+    std::map<std::string, float> exchange_rates{{"PLN", 1}};
+    std::map<std::string, std::map<std::string, std::string>> currency_names;
     std::string rates_publication_date;
     std::vector<std::string> error_strings;
 
@@ -77,12 +79,30 @@ struct currency_converter {
         print(nextStr, args...);
     }
 
+    auto string_to_vector(std::string const& str) -> std::vector<std::string>
+    {
+        std::stringstream tmp_ss(str);
+        std::istream_iterator<std::string> const tmp_ss_begin(tmp_ss);
+        std::istream_iterator<std::string> const tmp_ss_end;
+
+        std::vector<std::string> v(tmp_ss_begin, tmp_ss_end);
+        return v;
+    }
+
+    auto string_to_uppercase(std::string str) -> std::string
+    {
+        for (auto& character : str) {
+            character = std::toupper(character);
+        }
+
+        return str;
+    }
+
     template<typename T>
     auto vector_index_of(std::vector<T> const& v, T const element_to_find)
         -> int
     {
         auto i = int{0};
-
         for (auto const& each : v) {
             if (each == element_to_find) {
                 return i;
@@ -90,7 +110,6 @@ struct currency_converter {
 
             i++;
         }
-
         return -1;
     }
 
@@ -125,29 +144,28 @@ struct currency_converter {
         return parsed_data;
     }
 
-    auto set_currency_names(std::string const language_code,
-                            json const names_obj) -> void
+    auto set_currency_names(std::string const& language_code,
+                            json const& names_obj) -> void
     {
-        currency_names[language_code] = names_obj;
+        for (auto const& [currency, name] : names_obj.items()) {
+            currency_names[language_code][currency] = name;
+        }
     }
 
     auto set_exchange_rates(json const& nbp_json) -> void
     {
         rates_publication_date = nbp_json[0]["effectiveDate"];
 
-        auto rates             = json{{"PLN", 1}};
         auto pl_currency_names = json::object();
 
         for (auto const& rate : nbp_json[0]["rates"]) {
-            std::string const code = rate["code"];
+            auto const code = rate["code"].get<std::string>();
 
-            rates[code]             = rate["mid"];
+            exchange_rates[code]    = rate["mid"].get<float>();
             pl_currency_names[code] = rate["currency"];
         }
 
-        exchange_rates = rates;
-
-        set_currency_names("pl", std::move(pl_currency_names));
+        set_currency_names("PL", pl_currency_names);
     }
 
     auto fetch_data() -> void
@@ -162,8 +180,8 @@ struct currency_converter {
             std::thread{[&] { nbp_response = cpr::Get(NBP_URL); }};
         std::vector<std::thread> currency_names_threads;
         for (auto const& [lang, url] : CURRENCY_NAMES_URLS) {
-            auto const l = std::ref(lang);
-            auto const u = std::ref(url);
+            auto const& l = lang;
+            auto const& u = url;
 
             currency_names_threads.push_back(std::thread{
                 [&] { currency_names_responses[l] = cpr::Get(u); }});
@@ -205,7 +223,20 @@ struct currency_converter {
         }
     }
 
-    auto print_help(std::vector<std::string> const& args) -> void
+    auto is_correct_currency_code(std::string const& str) -> bool
+    {
+        return exchange_rates.count(str);
+    }
+
+    auto convert_currency(float const& input_value,
+                          std::string const& input_currency,
+                          std::string const& target_currency) -> float
+    {
+        auto const value_in_PLN = input_value * exchange_rates[input_currency];
+        return value_in_PLN / exchange_rates[target_currency];
+    }
+
+    auto print_help(std::vector<std::string> const& args) -> void  // TODO
     {
         auto const has_no_args = args.empty();
 
@@ -213,9 +244,9 @@ struct currency_converter {
             print("TODO - help\n");
         }
 
-        auto const i = vector_index_of(args, std::string{"qwe"});
+        auto const i = vector_index_of(args, std::string{"TO"});
         if (has_no_args || i != -1) {
-            print("qwe\n");
+            print("'to' help\n");
         }
     }
 
@@ -237,29 +268,6 @@ struct currency_converter {
         print("Please try again later...\n", Text_color::red);
     }
 
-    auto await_commands() -> void
-    {
-        while (error_strings.empty()) {
-            auto line = std::string{};
-
-            print("> ");
-            std::getline(std::cin, line);
-
-            if (line.empty()) {
-                continue;
-            }
-
-            if (line == "exit") {
-                print("Bye!\n");
-                return;
-            }
-
-            read_command_line(line);
-        }
-
-        print_error_strings();
-    }
-
     /*auto print_currency_table() -> const void {
         fort::utf8_table table;
         table << fort::header << "code" << "currency" << "mid" << fort::endr;
@@ -274,6 +282,130 @@ struct currency_converter {
     std::endl;
     }*/
 
+    auto print_currency_conversion_syntax_error_string() -> void
+    {
+        print("Incorrect usage of the ",
+              Text_color::red,
+              "TO",
+              Text_color::yellow,
+              " command\n",
+              Text_color::red);
+        print_help({"TO"});
+    }
+
+    auto print_currency_conversion(std::vector<std::string>& args) -> void
+    {
+        auto const command_index = vector_index_of(args, std::string{"TO"});
+
+        if (!command_index || command_index + 2 < args.size()) {
+            print_currency_conversion_syntax_error_string();
+            return;
+        }
+
+        std::vector<std::string> unknown_currency_codes;
+
+        auto const& target_currency = args.back();
+        if (!is_correct_currency_code(target_currency)) {
+            unknown_currency_codes.push_back(target_currency);
+        }
+
+        std::map<std::string, float> input_currencies;
+        {
+            auto currency_index = int{0};
+            while (currency_index < command_index) {
+                auto currency = std::string{};
+                auto value    = float{1};
+
+                if (!is_correct_currency_code(args[currency_index])) {
+                    try {
+                        value = std::stof(args[currency_index]);
+                    } catch (...) {
+                        unknown_currency_codes.push_back(args[currency_index]);
+
+                        currency_index++;
+                        continue;
+                    }
+
+                    if (currency_index + 1 >= command_index) {
+                        print_currency_conversion_syntax_error_string();
+                        return;
+                    }
+
+                    if (is_correct_currency_code(args[currency_index + 1])) {
+                        currency = args[currency_index + 1];
+
+                        currency_index += 2;
+                    } else {
+                        unknown_currency_codes.push_back(
+                            args[currency_index + 1]);
+
+                        currency_index += 2;
+                        continue;
+                    }
+                } else {
+                    currency = args[currency_index];
+
+                    currency_index++;
+                }
+
+                if (input_currencies[currency]) {
+                    input_currencies[currency] += value;
+                } else {
+                    input_currencies[currency] = value;
+                }
+            }
+        }
+
+
+        if (!unknown_currency_codes.empty()) {
+            print("Unknown currency codes: ", Text_color::red);
+            auto currency_index = int{0};
+            for (auto const& currency : unknown_currency_codes) {
+                print(currency, Text_color::red);
+
+                if (currency_index + 1 < unknown_currency_codes.size()) {
+                    print(", ", Text_color::red);
+                }
+
+                currency_index++;
+            }
+            print("\n");
+            return;
+        }
+
+        auto result_value = float{0};
+        for (auto const& [currency, value] : input_currencies) {
+            result_value += convert_currency(value, currency, target_currency);
+        }
+
+        print(std::to_string(result_value) + "\n");
+    }
+
+    auto await_commands() -> void
+    {
+        while (error_strings.empty()) {
+            auto line = std::string{};
+
+            print("> ");
+            std::getline(std::cin, line);
+
+            if (line.empty()) {
+                continue;
+            }
+
+            line = string_to_uppercase(line);
+
+            if (line == "EXIT") {
+                print("Bye!\n");
+                return;
+            }
+
+            read_command_line(line);
+        }
+
+        print_error_strings();
+    }
+
   public:
     currency_converter()
     {
@@ -282,18 +414,28 @@ struct currency_converter {
 
     auto read_command_line(std::string const& line) -> void
     {
-        std::stringstream tmp_line_ss(line);
-        std::istream_iterator<std::string> const tmp_line_ss_begin(tmp_line_ss);
-        std::istream_iterator<std::string> const tmp_line_ss_end;
+        auto args = string_to_vector(line);
 
-        std::vector<std::string> args(tmp_line_ss_begin, tmp_line_ss_end);
-
-        if (args[0] == "help") {
+        if (args[0] == "HELP") {
             args.erase(args.begin());
 
             print_help(args);
             return;
         }
+
+        if (args[0] == "TABLE") {
+            args.erase(args.begin());
+
+            print_help(args);
+            return;
+        }
+
+        if (vector_index_of(args, std::string{"TO"}) != -1) {
+            print_currency_conversion(args);
+            return;
+        }
+
+        print("Syntax error\n", Text_color::red);
     }
 
     auto start() -> void
@@ -304,11 +446,11 @@ struct currency_converter {
         }
 
         print("NBP currency converter",
-              Text_color::cyan,
+              Text_color::green,
               " by Kajetan Welc\n",
-              Text_color::magenta);
+              Text_color::blue);
         print("Type ",
-              "help",
+              "HELP",
               Text_color::yellow,
               " to see the complete list of commands\n");
 

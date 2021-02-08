@@ -19,6 +19,10 @@ auto main(int argc, char* argv[]) -> int
         auto line = std::string{""};
         for (auto i = 1; i < argc; i++) {
             line += argv[i];
+
+            if (i + 1 < argc) {
+                line += " ";
+            }
         }
 
         cc.read_command_line(line);
