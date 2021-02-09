@@ -79,6 +79,16 @@ struct currency_converter {
         print(nextStr, args...);
     }
 
+    template<typename KeyType, typename ValueType>
+    auto json_to_map(json const& obj) -> std::map<KeyType, ValueType>
+    {
+        auto m = std::map<KeyType, ValueType>{};
+        for (auto const& [key, value] : obj.items()) {
+            m[key] = value.get<ValueType>();
+        }
+        return m;
+    }
+
     auto string_to_vector(std::string const& str) -> std::vector<std::string>
     {
         std::stringstream tmp_ss(str);
@@ -111,6 +121,18 @@ struct currency_converter {
             i++;
         }
         return -1;
+    }
+
+    auto float_to_fixed(float const& number, int const& decimal_points) -> float
+    {
+        auto const multiplier = (int)std::pow(10, decimal_points);
+
+        auto result_number = float{};
+
+        result_number = (int)(number * multiplier + .5);
+        result_number = result_number / multiplier;
+
+        return result_number;
     }
 
     auto print_error_strings() -> void
@@ -147,9 +169,8 @@ struct currency_converter {
     auto set_currency_names(std::string const& language_code,
                             json const& names_obj) -> void
     {
-        for (auto const& [currency, name] : names_obj.items()) {
-            currency_names[language_code][currency] = name;
-        }
+        currency_names[language_code] =
+            json_to_map<std::string, std::string>(names_obj);
     }
 
     auto set_exchange_rates(json const& nbp_json) -> void
@@ -228,17 +249,25 @@ struct currency_converter {
         return exchange_rates.count(str);
     }
 
+    auto is_correct_language(std::string const& str) -> bool
+    {
+        return currency_names.count(str);
+    }
+
     auto convert_currency(float const& input_value,
                           std::string const& input_currency,
                           std::string const& target_currency) -> float
     {
         auto const value_in_PLN = input_value * exchange_rates[input_currency];
-        return value_in_PLN / exchange_rates[target_currency];
+        auto const result_value =
+            value_in_PLN / exchange_rates[target_currency];
+
+        return float_to_fixed(result_value, 4);
     }
 
     auto print_help(std::vector<std::string> const& args) -> void  // TODO
     {
-        auto const has_no_args = args.empty();
+        auto const has_no_args = bool{args.size() == 1};
 
         if (has_no_args) {
             print("TODO - help\n");
@@ -268,23 +297,9 @@ struct currency_converter {
         print("Please try again later...\n", Text_color::red);
     }
 
-    /*auto print_currency_table() -> const void {
-        fort::utf8_table table;
-        table << fort::header << "code" << "currency" << "mid" << fort::endr;
-        table << exchange_rates[0]["code"] << exchange_rates[0]["currency"] <<
-    exchange_rates[0]["mid"] << fort::endr; table << exchange_rates[1]["code"]
-    << exchange_rates[1]["currency"] << exchange_rates[1]["mid"] << fort::endr;
-        table << exchange_rates[2]["code"] << exchange_rates[2]["currency"] <<
-    exchange_rates[2]["mid"] << fort::endr; table << exchange_rates[3]["code"]
-    << exchange_rates[3]["currency"] << exchange_rates[3]["mid"] << fort::endr;
-        table << exchange_rates[4]["code"] << exchange_rates[4]["currency"] <<
-    exchange_rates[4]["mid"] << fort::endr; std::cout << table.to_string() <<
-    std::endl;
-    }*/
-
     auto print_currency_conversion_syntax_error_string() -> void
     {
-        print("Incorrect usage of the ",
+        print("Incorrect usage of ",
               Text_color::red,
               "TO",
               Text_color::yellow,
@@ -293,7 +308,7 @@ struct currency_converter {
         print_help({"TO"});
     }
 
-    auto print_currency_conversion(std::vector<std::string>& args) -> void
+    auto print_currency_conversion(std::vector<std::string> const& args) -> void
     {
         auto const command_index = vector_index_of(args, std::string{"TO"});
 
@@ -381,6 +396,178 @@ struct currency_converter {
         print(std::to_string(result_value) + "\n");
     }
 
+    auto make_currency_table(std::string const& base_currency,
+                             std::vector<std::string> const& target_currencies,
+                             std::string const& currency_names_language)
+        -> fort::utf8_table
+    {
+        auto const show_currency_names = bool{!currency_names_language.empty()};
+
+        fort::utf8_table table;
+        table << fort::header;
+        table << "Currency";
+        if (show_currency_names) {
+            table << "Name";
+        }
+        table << "Rate";
+        table << fort::endr;
+
+        for (auto const& currency : target_currencies) {
+            if (currency == base_currency) {
+                continue;
+            }
+
+            table << currency;
+            if (show_currency_names) {
+                if (currency_names[currency_names_language].count(currency)) {
+                    table << currency_names[currency_names_language][currency];
+                } else {
+                    table << "";
+                }
+            }
+            table << convert_currency(1, currency, base_currency) << fort::endr;
+        }
+
+        table.set_border_style(FT_BASIC2_STYLE);
+        auto rates_column = int{1};
+        if (show_currency_names) {
+            rates_column = 2;
+            table.column(1).set_cell_text_align(fort::text_align::left);
+            table[0][1].set_cell_text_align(fort::text_align::center);
+        }
+        table.column(0).set_cell_text_align(fort::text_align::center);
+        table.column(rates_column).set_cell_text_align(fort::text_align::left);
+        table.column(rates_column).set_cell_left_padding(1);
+        table.column(rates_column).set_cell_right_padding(1);
+        table[0][rates_column].set_cell_text_align(fort::text_align::center);
+        table.row(0).set_cell_content_fg_color(fort::color::light_blue);
+
+        return table;
+    }
+
+    auto print_currency_table_syntax_error_string() -> void
+    {
+        print("Incorrect usage of ",
+              Text_color::red,
+              "TABLE",
+              Text_color::yellow,
+              " command\n",
+              Text_color::red);
+        print_help({"TABLE"});
+    }
+
+    auto print_currency_table(std::vector<std::string> const& args) -> void
+    {
+        auto const args_size = (int)args.size();
+
+        if (args_size == 1) {
+            print_currency_table_syntax_error_string();
+            return;
+        }
+
+        auto const& base_currency = args[1];
+        if (!is_correct_currency_code(base_currency)) {
+            print("Unknown currency code: " + base_currency + "\n",
+                  Text_color::red);
+            return;
+        }
+
+        auto currency_names_language = std::string{};
+
+        auto name_currencies_parameter_index =
+            vector_index_of(args, std::string{"-N"});
+        if (name_currencies_parameter_index == -1) {
+            name_currencies_parameter_index =
+                vector_index_of(args, std::string{"--NAME-CURRENCIES"});
+        }
+
+        auto to_parameter_index = vector_index_of(args, std::string{"TO"});
+
+        if (args_size > 2 && name_currencies_parameter_index != 2
+            && to_parameter_index != 2) {
+            print_currency_table_syntax_error_string();
+            return;
+        }
+
+        // --NAME-CURRENCIES parameter
+        if (name_currencies_parameter_index != -1) {
+            if (to_parameter_index == name_currencies_parameter_index - 1) {
+                print_currency_table_syntax_error_string();
+                return;
+            }
+
+            if (args_size - 1 == name_currencies_parameter_index
+                || to_parameter_index - 1 == name_currencies_parameter_index) {
+                currency_names_language = DEFAULT_LANGUAGE;
+            } else {
+                auto const lang_index = name_currencies_parameter_index + 1;
+
+                if (is_correct_language(args[lang_index])) {
+                    currency_names_language = args[lang_index];
+                } else {
+                    print("Unknown language: " + args[lang_index] + "\n",
+                          Text_color::red);
+                    return;
+                }
+
+                if (lang_index < args_size - 1
+                    && to_parameter_index < name_currencies_parameter_index) {
+                    print_currency_table_syntax_error_string();
+                    return;
+                }
+            }
+        }
+
+        // TO parameter
+        std::vector<std::string> target_currencies;
+        if (to_parameter_index != -1) {
+            if (to_parameter_index == args_size - 1) {
+                print_currency_table_syntax_error_string();
+                return;
+            }
+
+            std::vector<std::string> unknown_currency_codes;
+            auto const last_target_currency_index =
+                int{to_parameter_index < name_currencies_parameter_index
+                        ? name_currencies_parameter_index - 1
+                        : args_size - 1};
+            for (auto i = to_parameter_index + 1;
+                 i <= last_target_currency_index;
+                 i++) {
+                if (is_correct_currency_code(args[i])) {
+                    target_currencies.push_back(args[i]);
+                } else {
+                    unknown_currency_codes.push_back(args[i]);
+                }
+            }
+
+            if (!unknown_currency_codes.empty()) {
+                print("Unknown currency codes: ", Text_color::red);
+                auto currency_index = int{0};
+                for (auto const& currency : unknown_currency_codes) {
+                    print(currency, Text_color::red);
+
+                    if (currency_index + 1 < unknown_currency_codes.size()) {
+                        print(", ", Text_color::red);
+                    }
+
+                    currency_index++;
+                }
+                print("\n");
+                return;
+            }
+        } else {
+            for (auto const& [currency, rate] : exchange_rates) {
+                target_currencies.push_back(currency);
+            }
+        }
+
+        auto const table = make_currency_table(
+            base_currency, target_currencies, currency_names_language);
+
+        print(table.to_string() + "\n");
+    }
+
     auto await_commands() -> void
     {
         while (error_strings.empty()) {
@@ -417,16 +604,12 @@ struct currency_converter {
         auto args = string_to_vector(line);
 
         if (args[0] == "HELP") {
-            args.erase(args.begin());
-
             print_help(args);
             return;
         }
 
         if (args[0] == "TABLE") {
-            args.erase(args.begin());
-
-            print_help(args);
+            print_currency_table(args);
             return;
         }
 
