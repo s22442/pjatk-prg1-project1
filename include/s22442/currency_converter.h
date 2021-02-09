@@ -25,7 +25,8 @@ struct currency_converter {
         "api.nbp.pl/api/exchangerates/tables/a?format=json";
     std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
         {"EN", "openexchangerates.org/api/currencies.json"}};
-    std::string const DEFAULT_LANGUAGE = "EN";
+    std::string const DEFAULT_LANGUAGE      = "EN";
+    int const DEFAULT_DECIMAL_POINTS_NUMBER = 4;
 
     std::map<std::string, float> exchange_rates{{"PLN", 1}};
     std::map<std::string, std::map<std::string, std::string>> currency_names;
@@ -79,16 +80,6 @@ struct currency_converter {
         print(nextStr, args...);
     }
 
-    /*template<typename KeyType, typename ValueType>
-    auto json_to_map(json const& obj) -> std::map<KeyType, ValueType>
-    {
-        auto m = std::map<KeyType, ValueType>{};
-        for (auto const& [key, value] : obj.items()) {
-            m[key] = value.get<ValueType>();
-        }
-        return m;
-    }*/
-
     auto string_to_vector(std::string const& str) -> std::vector<std::string>
     {
         std::stringstream tmp_ss(str);
@@ -108,8 +99,28 @@ struct currency_converter {
         return str;
     }
 
+    auto string_capitalize_words(std::string str) -> std::string
+    {
+        auto capitalize_next_char = bool{true};
+
+        for (auto& character : str) {
+            if (capitalize_next_char) {
+                character = std::toupper(character);
+
+                capitalize_next_char = false;
+                continue;
+            }
+
+            if (character == ' ') {
+                capitalize_next_char = true;
+            }
+        }
+
+        return str;
+    }
+
     template<typename T>
-    auto vector_index_of(std::vector<T> const& v, T const element_to_find)
+    auto vector_index_of(std::vector<T> const& v, T const& element_to_find)
         -> int
     {
         auto i = int{0};
@@ -135,19 +146,14 @@ struct currency_converter {
         return result_number;
     }
 
-    auto print_error_strings() -> void
+    auto float_to_fixed_to_string(float const& number,
+                                  int const& decimal_points = 2) -> std::string
     {
-        print("Problems occurred: ", Text_color::red);
+        std::stringstream tmp_ss;
+        tmp_ss << std::fixed << std::setprecision(decimal_points)
+               << float_to_fixed(number, decimal_points);
 
-        for (auto const& e : error_strings) {
-            print(e, Text_color::red);
-
-            if (e != error_strings.back()) {
-                print(", ", Text_color::red);
-            }
-        }
-
-        print("\n");
+        return tmp_ss.str();
     }
 
     auto parse_json(std::string const& str,
@@ -166,14 +172,27 @@ struct currency_converter {
         return parsed_data;
     }
 
+    auto print_error_strings() -> void
+    {
+        print("Problems occurred: ", Text_color::red);
+
+        for (auto const& e : error_strings) {
+            print(e, Text_color::red);
+
+            if (e != error_strings.back()) {
+                print(", ", Text_color::red);
+            }
+        }
+
+        print("\n");
+    }
+
     auto set_currency_names(std::string const& language_code,
                             json const& names_obj) -> void
     {
-        /*currency_names[language_code] =
-            json_to_map<std::string, std::string>(names_obj);*/
-
         for (auto const& [currency, name] : names_obj.items()) {
-            currency_names[language_code][currency] = name.get<std::string>();
+            currency_names[language_code][currency] =
+                string_capitalize_words(name.get<std::string>());
         }
     }
 
@@ -181,7 +200,7 @@ struct currency_converter {
     {
         rates_publication_date = nbp_json[0]["effectiveDate"];
 
-        auto pl_currency_names = json::object();
+        auto pl_currency_names = json{{"PLN", "Polski złoty"}};
 
         for (auto const& rate : nbp_json[0]["rates"]) {
             auto const code = rate["code"].get<std::string>();
@@ -263,10 +282,20 @@ struct currency_converter {
                           std::string const& target_currency) -> float
     {
         auto const value_in_PLN = input_value * exchange_rates[input_currency];
-        auto const result_value =
-            value_in_PLN / exchange_rates[target_currency];
+        return value_in_PLN / exchange_rates[target_currency];
+    }
 
-        return float_to_fixed(result_value, 4);
+    auto print_author() -> void
+    {
+        std::cout << termcolor::on_green << termcolor::white  //
+                  << " NBP "                                  // white on green
+                  << termcolor::reset                         // reset
+                  << termcolor::on_white << termcolor::green  //
+                  << " currency converter "                   // green on white
+                  << termcolor::magenta                       //
+                  << "by Kajetan Welc "  // magneta on white
+                  << termcolor::reset    // reset
+                  << "\n";
     }
 
     auto print_help(std::vector<std::string> const& args) -> void  // TODO
@@ -314,17 +343,30 @@ struct currency_converter {
 
     auto print_currency_conversion(std::vector<std::string> const& args) -> void
     {
-        auto const args_size     = (int)args.size();
-        auto const command_index = vector_index_of(args, std::string{"TO"});
+        auto const args_size = (int)args.size();
 
-        if (!command_index || command_index + 2 < args_size) {
+        auto const command_index = vector_index_of(args, std::string{"TO"});
+        auto result_only_parameter_index =
+            vector_index_of(args, std::string{"-R"});
+        if (result_only_parameter_index == -1) {
+            result_only_parameter_index =
+                vector_index_of(args, std::string{"--RESULT-ONLY"});
+        }
+
+        auto const print_result_only = bool{result_only_parameter_index != -1};
+
+        if (!command_index
+            || (!print_result_only && command_index + 2 < args_size)
+            || (print_result_only
+                && result_only_parameter_index != args_size - 1)) {
             print_currency_conversion_syntax_error_string();
             return;
         }
 
         std::vector<std::string> unknown_currency_codes;
 
-        auto const& target_currency = args.back();
+        auto const& target_currency = print_result_only ? args[args_size - 2]
+                                                        : args[args_size - 1];
         if (!is_correct_currency_code(target_currency)) {
             unknown_currency_codes.push_back(target_currency);
         }
@@ -400,7 +442,33 @@ struct currency_converter {
             result_value += convert_currency(value, currency, target_currency);
         }
 
-        print(std::to_string(result_value) + "\n");
+        auto const result_value_string = float_to_fixed_to_string(
+            result_value, DEFAULT_DECIMAL_POINTS_NUMBER);
+
+        if (print_result_only) {
+            print(result_value_string + "\n");
+        } else {
+            auto const input_currencies_size = (int)input_currencies.size();
+            auto currency_index              = int{0};
+            for (auto const& [currency, value] : input_currencies) {
+                auto const value_string = float_to_fixed_to_string(
+                    value, DEFAULT_DECIMAL_POINTS_NUMBER);
+
+                print(value_string + " " + currency);
+
+                if (currency_index == input_currencies_size - 1) {
+                    print(" = ");
+                } else {
+                    print(" + ");
+                }
+
+                currency_index++;
+            }
+            print(result_value_string,
+                  Text_color::cyan,
+                  " " + target_currency + "\n",
+                  Text_color::blue);
+        }
     }
 
     auto make_currency_table(std::string const& base_currency,
@@ -432,7 +500,12 @@ struct currency_converter {
                     table << "";
                 }
             }
-            table << convert_currency(1, currency, base_currency) << fort::endr;
+
+            auto const rate = convert_currency(1, currency, base_currency);
+
+            table << float_to_fixed_to_string(rate,
+                                              DEFAULT_DECIMAL_POINTS_NUMBER);
+            table << fort::endr;
         }
 
         table.set_border_style(FT_BASIC2_STYLE);
@@ -448,6 +521,7 @@ struct currency_converter {
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
         table.row(0).set_cell_content_fg_color(fort::color::light_blue);
+        table.row(0).set_cell_text_style(fort::text_style::bold);
 
         return table;
     }
@@ -617,6 +691,11 @@ struct currency_converter {
             return;
         }
 
+        if (args[0] == "AUTHOR" && args.size() == 1) {
+            print_author();
+            return;
+        }
+
         if (args[0] == "TABLE") {
             print_currency_table(args);
             return;
@@ -637,10 +716,7 @@ struct currency_converter {
             return;
         }
 
-        print("NBP currency converter",
-              Text_color::green,
-              " by Kajetan Welc\n",
-              Text_color::blue);
+        print_author();
         print("Type ",
               "HELP",
               Text_color::yellow,
