@@ -79,7 +79,7 @@ struct currency_converter {
         print(nextStr, args...);
     }
 
-    template<typename KeyType, typename ValueType>
+    /*template<typename KeyType, typename ValueType>
     auto json_to_map(json const& obj) -> std::map<KeyType, ValueType>
     {
         auto m = std::map<KeyType, ValueType>{};
@@ -87,7 +87,7 @@ struct currency_converter {
             m[key] = value.get<ValueType>();
         }
         return m;
-    }
+    }*/
 
     auto string_to_vector(std::string const& str) -> std::vector<std::string>
     {
@@ -169,8 +169,12 @@ struct currency_converter {
     auto set_currency_names(std::string const& language_code,
                             json const& names_obj) -> void
     {
-        currency_names[language_code] =
-            json_to_map<std::string, std::string>(names_obj);
+        /*currency_names[language_code] =
+            json_to_map<std::string, std::string>(names_obj);*/
+
+        for (auto const& [currency, name] : names_obj.items()) {
+            currency_names[language_code][currency] = name.get<std::string>();
+        }
     }
 
     auto set_exchange_rates(json const& nbp_json) -> void
