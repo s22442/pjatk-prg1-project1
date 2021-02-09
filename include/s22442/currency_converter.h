@@ -314,9 +314,10 @@ struct currency_converter {
 
     auto print_currency_conversion(std::vector<std::string> const& args) -> void
     {
+        auto const args_size     = (int)args.size();
         auto const command_index = vector_index_of(args, std::string{"TO"});
 
-        if (!command_index || command_index + 2 < args.size()) {
+        if (!command_index || command_index + 2 < args_size) {
             print_currency_conversion_syntax_error_string();
             return;
         }
@@ -378,11 +379,13 @@ struct currency_converter {
 
         if (!unknown_currency_codes.empty()) {
             print("Unknown currency codes: ", Text_color::red);
+            auto const unknown_currency_codes_size =
+                (int)unknown_currency_codes.size();
             auto currency_index = int{0};
             for (auto const& currency : unknown_currency_codes) {
                 print(currency, Text_color::red);
 
-                if (currency_index + 1 < unknown_currency_codes.size()) {
+                if (currency_index + 1 < unknown_currency_codes_size) {
                     print(", ", Text_color::red);
                 }
 
@@ -547,11 +550,13 @@ struct currency_converter {
 
             if (!unknown_currency_codes.empty()) {
                 print("Unknown currency codes: ", Text_color::red);
+                auto const unknown_currency_codes_size =
+                    (int)unknown_currency_codes.size();
                 auto currency_index = int{0};
                 for (auto const& currency : unknown_currency_codes) {
                     print(currency, Text_color::red);
 
-                    if (currency_index + 1 < unknown_currency_codes.size()) {
+                    if (currency_index + 1 < unknown_currency_codes_size) {
                         print(", ", Text_color::red);
                     }
 
