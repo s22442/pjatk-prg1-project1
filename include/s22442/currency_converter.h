@@ -216,7 +216,7 @@ struct currency_converter {
     {
         print("Problems occurred: ", Text_color::red);
 
-        auto const error_strings_size = error_strings.size();
+        auto const error_strings_size = (int)error_strings.size();
         auto error_string_index       = int{0};
         for (auto const& str : error_strings) {
             print(str, Text_color::red);
@@ -390,7 +390,7 @@ struct currency_converter {
         if (!unknown_commands.empty()) {
             print("No help entries for: ", Text_color::red);
 
-            auto const unknown_commands_size = unknown_commands.size();
+            auto const unknown_commands_size = (int)unknown_commands.size();
             auto unknown_command_index       = int{0};
             for (auto const& each : unknown_commands) {
                 print(each, Text_color::red);
