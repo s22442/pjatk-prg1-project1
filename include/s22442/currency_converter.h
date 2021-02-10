@@ -30,6 +30,7 @@ struct currency_converter {
         {"AUTHOR",
          {{"template", "author"},
           {"description", "print the author of the program"}}},
+        {"EXIT", {{"template", "exit"}, {"description", "exit the program"}}},
         {"TABLE",
          {{"template", "table BASE_CURRENCY_CODE [OPTIONS...]"},
           {"description",
@@ -237,6 +238,7 @@ struct currency_converter {
         print("Incorrect usage of \"" + command + "\" command\n",
               Text_color::red);
         print_help_entry(string_to_uppercase(command));
+        print("\n");
     }
 
     auto set_currency_names(std::string const& language_code,
@@ -372,7 +374,19 @@ struct currency_converter {
     {
         auto const has_no_args = bool{args.size() == 1};
 
-        std::vector<std::string> help_args{args.begin() + 1, args.end()};
+        std::vector<std::string> help_args;
+        if (has_no_args) {
+            for (auto const& [command, obj] : HELP_OBJECTS) {
+                if (command == "EXIT" && !awaits_commands) {
+                    continue;
+                }
+
+                help_args.push_back(command);
+            }
+        } else {
+            help_args = std::vector<std::string>(args.begin() + 1, args.end());
+        }
+
         std::vector<std::string> unknown_commands;
 
         for (auto const& arg : help_args) {
@@ -402,10 +416,6 @@ struct currency_converter {
                 unknown_command_index++;
             }
             print("\n");
-        }
-
-
-        if (awaits_commands) {
         }
     }
 
