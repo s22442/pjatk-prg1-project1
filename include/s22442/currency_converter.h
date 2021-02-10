@@ -25,9 +25,48 @@ struct currency_converter {
         "api.nbp.pl/api/exchangerates/tables/a?format=json";
     std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
         {"EN", "openexchangerates.org/api/currencies.json"}};
+
+    std::map<std::string, json> const HELP_OBJECTS{
+        {"AUTHOR",
+         {{"template", "author"},
+          {"description", "print the author of the program"}}},
+        {"TABLE",
+         {{"template", "table BASE_CURRENCY_CODE [OPTIONS...]"},
+          {"description",
+           "print exchange rate table for the selected base currency"},
+          {"options",
+           json::array({
+               json::object({{"template", "to TARGET_CURRENCY_CODES..."},
+                             {"description",
+                              "limit the table target currencies to the "
+                              "selected ones"}}),
+               json::object(
+                   {{"template", "-n, --name-currencies [LANGUAGE_CODE]"},
+                    {"description",
+                     "add currency names of the selected language code to "
+                     "the table. If no code is present, the default "
+                     "language is used"}}),
+           })}}},
+        {"TO",
+         {{"template",
+           "BASE_CURRENCY_CODES... to TARGET_CURRENCY_CODE [OPTIONS...]"},
+          {"description",
+           "print the sum of the base currencies in the target currency"},
+          {"options",
+           json::array({json::object(
+               {{"template", "-r, --result-only"},
+                {"description", "print only the result value"}})})}}},
+        {"UPDATE",
+         {{"template", "update [OPTIONS...]"},
+          {"description", "update the entire currency converter database"},
+          {"options",
+           json::array({json::object({{"template", "-s, --silent-mode"},
+                                      {"description", "print nothing"}})})}}}};
+
     std::string const DEFAULT_LANGUAGE      = "EN";
     int const DEFAULT_DECIMAL_POINTS_NUMBER = 4;
 
+    bool awaits_commands = false;
     std::map<std::string, float> exchange_rates{{"PLN", 1}};
     std::map<std::string, std::map<std::string, std::string>> currency_names;
     std::string rates_publication_date;
@@ -157,14 +196,15 @@ struct currency_converter {
     }
 
     auto parse_json(std::string const& str,
-                    std::string const error_string = "JSON parse error") -> json
+                    std::string const parse_error_string = "JSON parse error")
+        -> json
     {
         auto parsed_data = json{};
 
         try {
             parsed_data = json::parse(str);
         } catch (nlohmann::detail::parse_error const&) {
-            error_strings.push_back(error_string);
+            error_strings.push_back(parse_error_string);
         } catch (std::exception const& e) {
             error_strings.push_back(e.what());
         }
@@ -176,15 +216,27 @@ struct currency_converter {
     {
         print("Problems occurred: ", Text_color::red);
 
-        for (auto const& e : error_strings) {
-            print(e, Text_color::red);
+        auto const error_strings_size = error_strings.size();
+        auto error_string_index       = int{0};
+        for (auto const& str : error_strings) {
+            print(str, Text_color::red);
 
-            if (e != error_strings.back()) {
+            if (error_string_index < error_strings_size - 1) {
                 print(", ", Text_color::red);
             }
+
+            error_string_index++;
         }
 
         print("\n");
+    }
+
+    auto print_incorrect_command_usage_string(std::string const& command)
+        -> void
+    {
+        print("Incorrect usage of \"" + command + "\" command\n",
+              Text_color::red);
+        print_help_entry(string_to_uppercase(command));
     }
 
     auto set_currency_names(std::string const& language_code,
@@ -298,47 +350,93 @@ struct currency_converter {
                   << "\n";
     }
 
-    auto print_help(std::vector<std::string> const& args) -> void  // TODO
+    auto print_help_entry(std::string const& command) -> void
+    {
+        auto const& entry = HELP_OBJECTS.at(command);
+
+        print("\n");
+        print(entry["template"].get<std::string>() + "\n", Text_color::yellow);
+        print("  " + entry["description"].get<std::string>() + "\n");
+
+        if (entry.contains("options")) {
+            print("  Options:\n");
+            for (auto const& each : entry["options"]) {
+                print("  " + each["template"].get<std::string>() + "\n",
+                      Text_color::yellow);
+                print("    " + each["description"].get<std::string>() + "\n");
+            }
+        }
+    }
+
+    auto print_help(std::vector<std::string> const& args) -> void
     {
         auto const has_no_args = bool{args.size() == 1};
 
-        if (has_no_args) {
-            print("TODO - help\n");
+        std::vector<std::string> help_args{args.begin() + 1, args.end()};
+        std::vector<std::string> unknown_commands;
+
+        for (auto const& arg : help_args) {
+            if (HELP_OBJECTS.count(arg)) {
+                print_help_entry(arg);
+            } else {
+                unknown_commands.push_back(arg);
+            }
         }
 
-        auto const i = vector_index_of(args, std::string{"TO"});
-        if (has_no_args || i != -1) {
-            print("'to' help\n");
+        if (help_args.size() != unknown_commands.size()) {
+            print("\n");
+        }
+
+        if (!unknown_commands.empty()) {
+            print("No help entries for: ", Text_color::red);
+
+            auto const unknown_commands_size = unknown_commands.size();
+            auto unknown_command_index       = int{0};
+            for (auto const& each : unknown_commands) {
+                print(each, Text_color::red);
+
+                if (unknown_command_index < unknown_commands_size - 1) {
+                    print(", ", Text_color::red);
+                }
+
+                unknown_command_index++;
+            }
+            print("\n");
+        }
+
+
+        if (awaits_commands) {
         }
     }
 
-    auto update_data() -> void
+    auto update_data(std::vector<std::string> const& args) -> void
     {
+        auto silent_mode = bool{false};
+
+        if (args.size() > 1) {
+            if (args.size() > 2
+                || (args[1] != "-S" && args[1] != "--SILENT-MODE")) {
+                print_incorrect_command_usage_string("update");
+                return;
+            }
+            silent_mode = true;
+        }
+
         fetch_data();
 
         if (error_strings.empty()) {
-            print("Data update successful!\n", Text_color::green);
+            if (!silent_mode) {
+                print("Data update successful\n", Text_color::green);
+            }
             return;
         }
 
-        print("Fetching data has failed!\n", Text_color::red);
-
-        print_error_strings();
-
+        if (!silent_mode) {
+            print("Fetching data has failed\n", Text_color::red);
+            print_error_strings();
+            print("Please try again later...\n", Text_color::red);
+        }
         error_strings.clear();
-
-        print("Please try again later...\n", Text_color::red);
-    }
-
-    auto print_currency_conversion_syntax_error_string() -> void
-    {
-        print("Incorrect usage of ",
-              Text_color::red,
-              "TO",
-              Text_color::yellow,
-              " command\n",
-              Text_color::red);
-        print_help({"TO"});
     }
 
     auto print_currency_conversion(std::vector<std::string> const& args) -> void
@@ -359,7 +457,7 @@ struct currency_converter {
             || (!print_result_only && command_index + 2 < args_size)
             || (print_result_only
                 && result_only_parameter_index != args_size - 1)) {
-            print_currency_conversion_syntax_error_string();
+            print_incorrect_command_usage_string("to");
             return;
         }
 
@@ -389,7 +487,7 @@ struct currency_converter {
                     }
 
                     if (currency_index + 1 >= command_index) {
-                        print_currency_conversion_syntax_error_string();
+                        print_incorrect_command_usage_string("to");
                         return;
                     }
 
@@ -526,23 +624,12 @@ struct currency_converter {
         return table;
     }
 
-    auto print_currency_table_syntax_error_string() -> void
-    {
-        print("Incorrect usage of ",
-              Text_color::red,
-              "TABLE",
-              Text_color::yellow,
-              " command\n",
-              Text_color::red);
-        print_help({"TABLE"});
-    }
-
     auto print_currency_table(std::vector<std::string> const& args) -> void
     {
         auto const args_size = (int)args.size();
 
         if (args_size == 1) {
-            print_currency_table_syntax_error_string();
+            print_incorrect_command_usage_string("table");
             return;
         }
 
@@ -566,14 +653,14 @@ struct currency_converter {
 
         if (args_size > 2 && name_currencies_parameter_index != 2
             && to_parameter_index != 2) {
-            print_currency_table_syntax_error_string();
+            print_incorrect_command_usage_string("table");
             return;
         }
 
         // --NAME-CURRENCIES parameter
         if (name_currencies_parameter_index != -1) {
             if (to_parameter_index == name_currencies_parameter_index - 1) {
-                print_currency_table_syntax_error_string();
+                print_incorrect_command_usage_string("table");
                 return;
             }
 
@@ -593,7 +680,7 @@ struct currency_converter {
 
                 if (lang_index < args_size - 1
                     && to_parameter_index < name_currencies_parameter_index) {
-                    print_currency_table_syntax_error_string();
+                    print_incorrect_command_usage_string("table");
                     return;
                 }
             }
@@ -603,7 +690,7 @@ struct currency_converter {
         std::vector<std::string> target_currencies;
         if (to_parameter_index != -1) {
             if (to_parameter_index == args_size - 1) {
-                print_currency_table_syntax_error_string();
+                print_incorrect_command_usage_string("table");
                 return;
             }
 
@@ -653,6 +740,8 @@ struct currency_converter {
 
     auto await_commands() -> void
     {
+        awaits_commands = true;
+
         while (error_strings.empty()) {
             auto line = std::string{};
 
@@ -667,13 +756,13 @@ struct currency_converter {
 
             if (line == "EXIT") {
                 print("Bye!\n");
-                return;
+                break;
             }
 
             read_command_line(line);
         }
 
-        print_error_strings();
+        awaits_commands = false;
     }
 
   public:
@@ -691,8 +780,17 @@ struct currency_converter {
             return;
         }
 
-        if (args[0] == "AUTHOR" && args.size() == 1) {
-            print_author();
+        if (args[0] == "AUTHOR") {
+            if (args.size() == 1) {
+                print_author();
+            } else {
+                print_incorrect_command_usage_string("author");
+            }
+            return;
+        }
+
+        if (args[0] == "UPDATE") {
+            update_data(args);
             return;
         }
 
@@ -706,7 +804,10 @@ struct currency_converter {
             return;
         }
 
-        print("Syntax error\n", Text_color::red);
+        print("Syntax error\n",
+              Text_color::red,
+              "Type \"help\" to see the complete list of commands\n",
+              Text_color::red);
     }
 
     auto start() -> void
@@ -716,11 +817,14 @@ struct currency_converter {
             return;
         }
 
+        if (awaits_commands) {
+            print("The currency converter has already started\n",
+                  Text_color::red);
+            return;
+        }
+
         print_author();
-        print("Type ",
-              "HELP",
-              Text_color::yellow,
-              " to see the complete list of commands\n");
+        print("Type \"help\" to see the complete list of commands\n");
 
         await_commands();
     }
