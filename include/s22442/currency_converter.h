@@ -1,3 +1,4 @@
+// Author: Kajetan Welc - s22442
 
 #ifndef S22442_CURRENCY_CONVERTER_H
 #define S22442_CURRENCY_CONVERTER_H
@@ -31,6 +32,8 @@ struct currency_converter {
          {{"template", "author"},
           {"description", "print the author of the program"}}},
         {"EXIT", {{"template", "exit"}, {"description", "exit the program"}}},
+        {"LOGO",
+         {{"template", "logo"}, {"description", "print the program logo"}}},
         {"TABLE",
          {{"template", "table BASE_CURRENCY_CODE [OPTIONS...]"},
           {"description",
@@ -73,42 +76,65 @@ struct currency_converter {
     std::string rates_publication_date;
     std::vector<std::string> error_strings;
 
-    enum class Text_color { red, yellow, cyan, blue, green, magenta, white };
+    enum class color { blue, cyan, green, light, red, yellow };
 
-    auto print(std::string const& str,
-               Text_color const& color = Text_color::white) -> void
+    auto print(std::string const& str, color const& c = color::light) -> void
     {
-        switch (color) {
-        case Text_color::red:
-            std::cout << termcolor::red;
+#if defined(__APPLE__) || defined(__unix__) || defined(__unix)
+        switch (c) {
+        case color::blue:
+            std::cout << termcolor::color<50, 180, 255>;
             break;
-        case Text_color::yellow:
-            std::cout << termcolor::yellow;
+        case color::cyan:
+            std::cout << termcolor::color<0, 255, 255>;
             break;
-        case Text_color::cyan:
-            std::cout << termcolor::cyan;
+        case color::green:
+            std::cout << termcolor::color<0, 255, 0>;
             break;
-        case Text_color::blue:
-            std::cout << termcolor::blue;
+        case color::light:
+            std::cout << termcolor::color<248, 249, 250>;
             break;
-        case Text_color::green:
-            std::cout << termcolor::green;
+        case color::red:
+            std::cout << termcolor::color<255, 60, 60>;
             break;
-        case Text_color::magenta:
-            std::cout << termcolor::magenta;
+        case color::yellow:
+            std::cout << termcolor::color<255, 255, 0>;
             break;
         default:
             break;
         }
+#elif defined(_WIN32) || defined(_WIN64)
+        switch (c) {
+        case color::blue:
+            std::cout << termcolor::blue;
+            break;
+        case color::cyan:
+            std::cout << termcolor::cyan;
+            break;
+        case color::green:
+            std::cout << termcolor::green;
+            break;
+        case color::light:
+            std::cout << termcolor::white;
+            break;
+        case color::red:
+            std::cout << termcolor::red;
+            break;
+        case color::yellow:
+            std::cout << termcolor::yellow;
+            break;
+        default:
+            break;
+        }
+#endif
 
-        std::cout << str << termcolor::white;
+        std::cout << str << termcolor::reset;
     }
 
     template<typename... Args>
-    auto print(std::string const& str, Text_color const& color, Args... args)
-        -> void
+    auto print(std::string const& str, color const& c, Args... args) -> void
     {
-        print(str, color);
+        print(str, c);
         print(args...);
     }
 
@@ -215,15 +241,15 @@ struct currency_converter {
 
     auto print_error_strings() -> void
     {
-        print("Problems occurred: ", Text_color::red);
+        print("Problems occurred: ", color::red);
 
         auto const error_strings_size = (int)error_strings.size();
         auto error_string_index       = int{0};
         for (auto const& str : error_strings) {
-            print(str, Text_color::red);
+            print(str, color::red);
 
             if (error_string_index < error_strings_size - 1) {
-                print(", ", Text_color::red);
+                print(", ", color::red);
             }
 
             error_string_index++;
@@ -235,8 +261,7 @@ struct currency_converter {
     auto print_incorrect_command_usage_string(std::string const& command)
         -> void
     {
-        print("Incorrect usage of \"" + command + "\" command\n",
-              Text_color::red);
+        print("Incorrect usage of \"" + command + "\" command\n", color::red);
         print_help_entry(string_to_uppercase(command));
         print("\n");
     }
@@ -339,17 +364,36 @@ struct currency_converter {
         return value_in_PLN / exchange_rates[target_currency];
     }
 
-    auto print_author() -> void
+    auto print_logo() -> void
     {
+#if defined(__APPLE__) || defined(__unix__) || defined(__unix)
+        std::cout << termcolor::on_color<0, 105, 95>     //
+                  << termcolor::color<248, 249, 250>     //
+                  << " NBP "                             // light on dark green
+                  << termcolor::reset                    // reset
+                  << termcolor::on_color<248, 249, 250>  //
+                  << termcolor::color<0, 105, 95>        //
+                  << " currency converter "              // dark green on light
+                  << termcolor::color<0, 123, 255>       //
+                  << "by Kajetan Welc "                  // dark blue on light
+                  << termcolor::reset                    // reset
+                  << "\n";
+#elif defined(_WIN32) || defined(_WIN64)
         std::cout << termcolor::on_green << termcolor::white  //
                   << " NBP "                                  // white on green
                   << termcolor::reset                         // reset
                   << termcolor::on_white << termcolor::green  //
                   << " currency converter "                   // green on white
-                  << termcolor::magenta                       //
-                  << "by Kajetan Welc "  // magneta on white
-                  << termcolor::reset    // reset
+                  << termcolor::blue                          //
+                  << "by Kajetan Welc "                       // blue on white
+                  << termcolor::reset                         // reset
                   << "\n";
+#endif
+    }
+
+    auto print_author() -> void
+    {
+        print("Kajetan Welc - s22442\n");
     }
 
     auto print_help_entry(std::string const& command) -> void
@@ -357,14 +401,14 @@ struct currency_converter {
         auto const& entry = HELP_OBJECTS.at(command);
 
         print("\n");
-        print(entry["template"].get<std::string>() + "\n", Text_color::yellow);
+        print(entry["template"].get<std::string>() + "\n", color::yellow);
         print("  " + entry["description"].get<std::string>() + "\n");
 
         if (entry.contains("options")) {
             print("  Options:\n");
             for (auto const& each : entry["options"]) {
                 print("  " + each["template"].get<std::string>() + "\n",
-                      Text_color::yellow);
+                      color::yellow);
                 print("    " + each["description"].get<std::string>() + "\n");
             }
         }
@@ -402,15 +446,15 @@ struct currency_converter {
         }
 
         if (!unknown_commands.empty()) {
-            print("No help entries for: ", Text_color::red);
+            print("No help entries for: ", color::red);
 
             auto const unknown_commands_size = (int)unknown_commands.size();
             auto unknown_command_index       = int{0};
             for (auto const& each : unknown_commands) {
-                print(each, Text_color::red);
+                print(each, color::red);
 
                 if (unknown_command_index < unknown_commands_size - 1) {
-                    print(", ", Text_color::red);
+                    print(", ", color::red);
                 }
 
                 unknown_command_index++;
@@ -436,15 +480,15 @@ struct currency_converter {
 
         if (error_strings.empty()) {
             if (!silent_mode) {
-                print("Data update successful\n", Text_color::green);
+                print("Data update successful!\n", color::green);
             }
             return;
         }
 
         if (!silent_mode) {
-            print("Fetching data has failed\n", Text_color::red);
+            print("Fetching data has failed!\n", color::red);
             print_error_strings();
-            print("Please try again later...\n", Text_color::red);
+            print("Please try again later...\n", color::red);
         }
         error_strings.clear();
     }
@@ -528,15 +572,15 @@ struct currency_converter {
 
 
         if (!unknown_currency_codes.empty()) {
-            print("Unknown currency codes: ", Text_color::red);
+            print("Unknown currency codes: ", color::red);
             auto const unknown_currency_codes_size =
                 (int)unknown_currency_codes.size();
             auto currency_index = int{0};
             for (auto const& currency : unknown_currency_codes) {
-                print(currency, Text_color::red);
+                print(currency, color::red);
 
                 if (currency_index + 1 < unknown_currency_codes_size) {
-                    print(", ", Text_color::red);
+                    print(", ", color::red);
                 }
 
                 currency_index++;
@@ -573,9 +617,9 @@ struct currency_converter {
                 currency_index++;
             }
             print(result_value_string,
-                  Text_color::cyan,
+                  color::cyan,
                   " " + target_currency + "\n",
-                  Text_color::blue);
+                  color::blue);
         }
     }
 
@@ -616,7 +660,12 @@ struct currency_converter {
             table << fort::endr;
         }
 
+#if defined(__APPLE__) || defined(__unix__) || defined(__unix)
+        table.set_border_style(FT_BOLD2_STYLE);
+#elif defined(_WIN32) || defined(_WIN64)
         table.set_border_style(FT_BASIC2_STYLE);
+#endif
+
         auto rates_column = int{1};
         if (show_currency_names) {
             rates_column = 2;
@@ -628,8 +677,11 @@ struct currency_converter {
         table.column(rates_column).set_cell_left_padding(1);
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
+#if defined(__APPLE__) || defined(__unix__) || defined(__unix)
+        table.row(0).set_cell_content_fg_color(fort::color::light_cyan);
+#elif defined(_WIN32) || defined(_WIN64)
         table.row(0).set_cell_content_fg_color(fort::color::light_blue);
-        table.row(0).set_cell_text_style(fort::text_style::bold);
+#endif
 
         return table;
     }
@@ -645,8 +697,7 @@ struct currency_converter {
 
         auto const& base_currency = args[1];
         if (!is_correct_currency_code(base_currency)) {
-            print("Unknown currency code: " + base_currency + "\n",
-                  Text_color::red);
+            print("Unknown currency code: " + base_currency + "\n", color::red);
             return;
         }
 
@@ -684,7 +735,7 @@ struct currency_converter {
                     currency_names_language = args[lang_index];
                 } else {
                     print("Unknown language: " + args[lang_index] + "\n",
-                          Text_color::red);
+                          color::red);
                     return;
                 }
 
@@ -720,15 +771,15 @@ struct currency_converter {
             }
 
             if (!unknown_currency_codes.empty()) {
-                print("Unknown currency codes: ", Text_color::red);
+                print("Unknown currency codes: ", color::red);
                 auto const unknown_currency_codes_size =
                     (int)unknown_currency_codes.size();
                 auto currency_index = int{0};
                 for (auto const& currency : unknown_currency_codes) {
-                    print(currency, Text_color::red);
+                    print(currency, color::red);
 
                     if (currency_index + 1 < unknown_currency_codes_size) {
-                        print(", ", Text_color::red);
+                        print(", ", color::red);
                     }
 
                     currency_index++;
@@ -752,7 +803,7 @@ struct currency_converter {
     {
         awaits_commands = true;
 
-        while (error_strings.empty()) {
+        while (error_strings.empty() && awaits_commands) {
             auto line = std::string{};
 
             print("> ");
@@ -762,17 +813,8 @@ struct currency_converter {
                 continue;
             }
 
-            line = string_to_uppercase(line);
-
-            if (line == "EXIT") {
-                print("Bye!\n");
-                break;
-            }
-
-            read_command_line(line);
+            read_command_line(std::move(line));
         }
-
-        awaits_commands = false;
     }
 
   public:
@@ -781,8 +823,9 @@ struct currency_converter {
         fetch_data();
     }
 
-    auto read_command_line(std::string const& line) -> void
+    auto read_command_line(std::string line) -> void
     {
+        line      = string_to_uppercase(line);
         auto args = string_to_vector(line);
 
         if (args[0] == "HELP") {
@@ -799,8 +842,22 @@ struct currency_converter {
             return;
         }
 
-        if (args[0] == "UPDATE") {
-            update_data(args);
+        if (args[0] == "EXIT") {
+            if (args.size() == 1) {
+                stop();
+                print("Bye!\n");
+            } else {
+                print_incorrect_command_usage_string("exit");
+            }
+            return;
+        }
+
+        if (args[0] == "LOGO") {
+            if (args.size() == 1) {
+                print_logo();
+            } else {
+                print_incorrect_command_usage_string("logo");
+            }
             return;
         }
 
@@ -814,10 +871,15 @@ struct currency_converter {
             return;
         }
 
+        if (args[0] == "UPDATE") {
+            update_data(args);
+            return;
+        }
+
         print("Syntax error\n",
-              Text_color::red,
+              color::red,
               "Type \"help\" to see the complete list of commands\n",
-              Text_color::red);
+              color::red);
     }
 
     auto start() -> void
@@ -828,15 +890,19 @@ struct currency_converter {
         }
 
         if (awaits_commands) {
-            print("The currency converter has already started\n",
-                  Text_color::red);
+            print("The currency converter has already started\n", color::red);
             return;
         }
 
-        print_author();
+        print_logo();
         print("Type \"help\" to see the complete list of commands\n");
 
         await_commands();
+    }
+
+    auto stop() -> void
+    {
+        awaits_commands = false;
     }
 };
 }  // namespace s22442

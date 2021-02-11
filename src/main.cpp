@@ -1,12 +1,6 @@
+// Author: Kajetan Welc - s22442
 
-#include <cpr/cpr.h>
-#include <nlohmann/json.hpp>
 #include <s22442/currency_converter.h>
-
-#include <iostream>
-#include <string>
-
-using json = nlohmann::json;
 
 
 auto main(int argc, char* argv[]) -> int
