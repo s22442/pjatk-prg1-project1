@@ -31,6 +31,9 @@ struct currency_converter {
         {"AUTHOR",
          {{"template", "author"},
           {"description", "print the author of the program"}}},
+        {"DATE",
+         {{"template", "date"},
+          {"description", "print publication date of the exchange rates"}}},
         {"EXIT", {{"template", "exit"}, {"description", "exit the program"}}},
         {"LOGO",
          {{"template", "logo"}, {"description", "print the program logo"}}},
@@ -39,27 +42,34 @@ struct currency_converter {
           {"description",
            "print exchange rate table for the selected base currency"},
           {"options",
-           json::array({
-               json::object({{"template", "to TARGET_CURRENCY_CODES..."},
-                             {"description",
-                              "limit the table target currencies to the "
-                              "selected ones"}}),
-               json::object(
-                   {{"template", "-n, --name-currencies [LANGUAGE_CODE]"},
-                    {"description",
-                     "add currency names of the selected language code to "
-                     "the table. If no code is present, the default "
-                     "language is used"}}),
-           })}}},
+           json::array(
+               {json::object({{"template", "to TARGET_CURRENCY_CODES..."},
+                              {"description",
+                               "limit the table target currencies to the "
+                               "selected ones"}}),
+                json::object(
+                    {{"template", "-n, --name-currencies [LANGUAGE_CODE]"},
+                     {"description",
+                      "add currency names of the selected language code to "
+                      "the table. If no code is present, the default "
+                      "language is used"}})})}}},
         {"TO",
          {{"template",
            "BASE_CURRENCY_CODES... to TARGET_CURRENCY_CODE [OPTIONS...]"},
           {"description",
            "print the sum of the base currencies in the target currency"},
           {"options",
-           json::array({json::object(
-               {{"template", "-r, --result-only"},
-                {"description", "print only the result value"}})})}}},
+           json::array(
+               {json::object(
+                    {{"template", "-n, --name-currencies [LANGUAGE_CODE]"},
+                     {"description",
+                      "add currency names of the selected language code to "
+                      "the output. If no code is present, the default "
+                      "language is used"}}),
+                json::object({{"template", "-r, --result-only"},
+                              {"description",
+                               "print only the result value. Cannot be used "
+                               "with option -n, --name-currencies"}})})}}},
         {"UPDATE",
          {{"template", "update [OPTIONS...]"},
           {"description", "update the entire currency converter database"},
@@ -463,6 +473,11 @@ struct currency_converter {
         }
     }
 
+    auto print_publication_date() -> void
+    {
+        print(rates_publication_date + "\n");
+    }
+
     auto update_data(std::vector<std::string> const& args) -> void
     {
         auto silent_mode = bool{false};
@@ -498,6 +513,7 @@ struct currency_converter {
         auto const args_size = (int)args.size();
 
         auto const command_index = vector_index_of(args, std::string{"TO"});
+
         auto result_only_parameter_index =
             vector_index_of(args, std::string{"-R"});
         if (result_only_parameter_index == -1) {
@@ -505,7 +521,14 @@ struct currency_converter {
                 vector_index_of(args, std::string{"--RESULT-ONLY"});
         }
 
+        auto name_currencies_index = vector_index_of(args, std::string{"-N"});
+        if (name_currencies_index == -1) {
+            name_currencies_index =
+                vector_index_of(args, std::string{"--NAME-CURRENCIES"});
+        }
+
         auto const print_result_only = bool{result_only_parameter_index != -1};
+        auto const print_currency_names = bool{name_currencies_index != -1}; // TODO
 
         if (!command_index
             || (!print_result_only && command_index + 2 < args_size)
@@ -678,7 +701,7 @@ struct currency_converter {
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
 #if defined(__APPLE__) || defined(__unix__) || defined(__unix)
-        table.row(0).set_cell_content_fg_color(fort::color::light_cyan);
+        table.row(0).set_cell_content_fg_color(fort::color::cyan);
 #elif defined(_WIN32) || defined(_WIN64)
         table.row(0).set_cell_content_fg_color(fort::color::light_blue);
 #endif
@@ -701,14 +724,14 @@ struct currency_converter {
             return;
         }
 
-        auto currency_names_language = std::string{};
-
         auto name_currencies_parameter_index =
             vector_index_of(args, std::string{"-N"});
         if (name_currencies_parameter_index == -1) {
             name_currencies_parameter_index =
                 vector_index_of(args, std::string{"--NAME-CURRENCIES"});
         }
+
+        auto currency_names_language = std::string{};
 
         auto to_parameter_index = vector_index_of(args, std::string{"TO"});
 
@@ -838,6 +861,15 @@ struct currency_converter {
                 print_author();
             } else {
                 print_incorrect_command_usage_string("author");
+            }
+            return;
+        }
+
+        if (args[0] == "DATE") {
+            if (args.size() == 1) {
+                print_publication_date();
+            } else {
+                print_incorrect_command_usage_string("date");
             }
             return;
         }
