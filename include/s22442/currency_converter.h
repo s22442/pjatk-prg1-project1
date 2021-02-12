@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -35,6 +36,13 @@ struct currency_converter {
          {{"template", "date"},
           {"description", "print publication date of the exchange rates"}}},
         {"EXIT", {{"template", "exit"}, {"description", "exit the program"}}},
+        {"FETCHLANG",
+         {{"template", "fetchlang LANGUAGE_CODE API_URL [OPTIONS...]"},
+          {"description",
+           "fetch additional currency names language from the url"},
+          {"options",
+           json::array({json::object({{"template", "-s, --silent-mode"},
+                                      {"description", "print nothing"}})})}}},
         {"LOGO",
          {{"template", "logo"}, {"description", "print the program logo"}}},
         {"TABLE",
@@ -84,7 +92,9 @@ struct currency_converter {
     std::map<std::string, float> exchange_rates{{"PLN", 1}};
     std::map<std::string, std::map<std::string, std::string>> currency_names;
     std::string rates_publication_date;
+
     std::vector<std::string> error_strings;
+    std::mutex error_strings_mtx;
 
     enum class color { blue, cyan, green, light, red, yellow };
 
@@ -175,6 +185,15 @@ struct currency_converter {
         return str;
     }
 
+    auto string_to_lowercase(std::string str) -> std::string
+    {
+        for (auto& character : str) {
+            character = std::tolower(character);
+        }
+
+        return str;
+    }
+
     auto string_capitalize_words(std::string str) -> std::string
     {
         auto capitalize_next_char = bool{true};
@@ -237,14 +256,18 @@ struct currency_converter {
         -> json
     {
         auto parsed_data = json{};
+        {
+            std::unique_lock<std::mutex> lck{error_strings_mtx};
 
-        try {
-            parsed_data = json::parse(str);
-        } catch (nlohmann::detail::parse_error const&) {
-            error_strings.push_back(parse_error_string);
-        } catch (std::exception const& e) {
-            error_strings.push_back(e.what());
+            try {
+                parsed_data = json::parse(str);
+            } catch (nlohmann::detail::parse_error const&) {
+                error_strings.push_back(parse_error_string);
+            } catch (std::exception const& e) {
+                error_strings.push_back(e.what());
+            }
         }
+
 
         return parsed_data;
     }
@@ -304,7 +327,6 @@ struct currency_converter {
     auto fetch_data() -> void
     {
         cpr::Response nbp_response;
-        std::map<std::string, cpr::Response> currency_names_responses;
 
         auto nbp_json = json::array();
         std::map<std::string, json> currency_names_jsons;
@@ -316,8 +338,9 @@ struct currency_converter {
             auto const& l = lang;
             auto const& u = url;
 
-            currency_names_threads.push_back(std::thread{
-                [&] { currency_names_responses[l] = cpr::Get(u); }});
+            currency_names_threads.push_back(std::thread{[&] {
+                currency_names_jsons[l] = fetch_currency_names_json(l, u);
+            }});
         }
 
         nbp_thread.join();
@@ -328,22 +351,12 @@ struct currency_converter {
         if (nbp_response.status_code >= 400) {
             error_strings.push_back("NBP HTTP request error");
         }
-        for (auto const& [lang, response] : currency_names_responses) {
-            if (response.status_code >= 400) {
-                error_strings.push_back(lang
-                                        + " currency names HTTP request error");
-            }
-        }
 
         if (!error_strings.empty()) {
             return;
         }
 
         nbp_json = parse_json(nbp_response.text, "NBP API parse error");
-        for (auto const& [lang, response] : currency_names_responses) {
-            currency_names_jsons[lang] = parse_json(
-                response.text, lang + " currency names API parse error");
-        }
 
         if (!error_strings.empty()) {
             return;
@@ -354,6 +367,82 @@ struct currency_converter {
         for (auto const& [lang, obj] : currency_names_jsons) {
             set_currency_names(lang, obj);
         }
+    }
+
+    auto fetch_currency_names_json(std::string const& language_code,
+                                   cpr::Url const& url) -> json
+    {
+        auto names_obj = json::object();
+
+        cpr::Response response = cpr::Get(url);
+
+        if (response.status_code >= 400) {
+            {
+                std::unique_lock<std::mutex> lck{error_strings_mtx};
+                error_strings.push_back(language_code
+                                        + " currency names HTTP request error");
+            }
+
+            return json::object();
+        }
+
+        names_obj = parse_json(
+            response.text, language_code + " currency names API parse error");
+
+        {
+            std::unique_lock<std::mutex> lck{error_strings_mtx};
+            if (!error_strings.empty()) {
+                return json::object();
+            }
+        }
+
+        return names_obj;
+    }
+
+    auto fetch_additional_currency_names_language(
+        std::vector<std::string> const& args) -> void
+    {
+        auto const args_size = (int)args.size();
+
+        auto silent_mode_index = vector_index_of(args, std::string{"-S"});
+        if (silent_mode_index == -1) {
+            silent_mode_index =
+                vector_index_of(args, std::string{"--SILENT-MODE"});
+        }
+
+        auto const silent_mode = bool{silent_mode_index != -1};
+
+        if ((!silent_mode && args_size != 3) || (silent_mode && args_size != 4)
+            || (silent_mode && silent_mode_index != args_size - 1)) {
+            print_incorrect_command_usage_string("fetchlang");
+            return;
+        }
+
+        auto const& language_code = args[1];
+        auto const url            = cpr::Url{string_to_lowercase(args[2])};
+
+        auto const currency_names_json =
+            fetch_currency_names_json(language_code, url);
+
+        if (error_strings.empty()) {
+            set_currency_names(language_code, currency_names_json);
+
+            if (!silent_mode) {
+                print(language_code
+                          + " currency names have been added successfully!\n",
+                      color::green);
+            }
+
+            return;
+        }
+
+        if (!silent_mode) {
+            print("Fetching " + language_code + " currency names has failed!\n",
+                  color::red);
+            print_error_strings();
+            print("Please check your input data...\n", color::red);
+        }
+        error_strings.clear();
     }
 
     auto is_correct_currency_code(std::string const& str) -> bool
@@ -528,20 +617,39 @@ struct currency_converter {
         }
 
         auto const print_result_only = bool{result_only_parameter_index != -1};
-        auto const print_currency_names = bool{name_currencies_index != -1}; // TODO
+        auto const print_currency_names = bool{name_currencies_index != -1};
 
-        if (!command_index
-            || (!print_result_only && command_index + 2 < args_size)
+        if (!command_index || (print_result_only && print_currency_names)
+            || (!print_result_only && !print_currency_names
+                && command_index + 2 < args_size)
             || (print_result_only
-                && result_only_parameter_index != args_size - 1)) {
+                && result_only_parameter_index != args_size - 1)
+            || (print_currency_names && name_currencies_index != args_size - 1
+                && name_currencies_index != args_size - 2)) {
             print_incorrect_command_usage_string("to");
             return;
         }
 
+        auto currency_names_language = std::string{};
+        if (print_currency_names) {
+            if (name_currencies_index == args_size - 1) {
+                currency_names_language = DEFAULT_LANGUAGE;
+            } else {
+                auto const lang_index = args_size - 1;
+
+                if (is_correct_language(args[lang_index])) {
+                    currency_names_language = args[lang_index];
+                } else {
+                    print("Unknown language: " + args[lang_index] + "\n",
+                          color::red);
+                    return;
+                }
+            }
+        }
+
         std::vector<std::string> unknown_currency_codes;
 
-        auto const& target_currency = print_result_only ? args[args_size - 2]
-                                                        : args[args_size - 1];
+        auto const& target_currency = args[command_index + 1];
         if (!is_correct_currency_code(target_currency)) {
             unknown_currency_codes.push_back(target_currency);
         }
@@ -629,20 +737,50 @@ struct currency_converter {
                 auto const value_string = float_to_fixed_to_string(
                     value, DEFAULT_DECIMAL_POINTS_NUMBER);
 
-                print(value_string + " " + currency);
+                print(value_string, " ", currency, color::yellow);
+
+                if (print_currency_names) {
+                    auto currency_name = std::string{};
+                    if (currency_names[currency_names_language].count(
+                            currency)) {
+                        currency_name =
+                            currency_names[currency_names_language][currency];
+                    } else {
+                        currency_name = "???";
+                    }
+
+                    print("(" + currency_name + ")");
+                }
 
                 if (currency_index == input_currencies_size - 1) {
-                    print(" = ");
+                    print(" => ");
                 } else {
                     print(" + ");
                 }
 
                 currency_index++;
             }
+
             print(result_value_string,
                   color::cyan,
-                  " " + target_currency + "\n",
-                  color::blue);
+                  " ",
+                  target_currency,
+                  color::yellow);
+
+            if (print_currency_names) {
+                auto currency_name = std::string{};
+                if (currency_names[currency_names_language].count(
+                        target_currency)) {
+                    currency_name = currency_names[currency_names_language]
+                                                  [target_currency];
+                } else {
+                    currency_name = "???";
+                }
+
+                print("(" + currency_name + ")");
+            }
+
+            print("\n");
         }
     }
 
@@ -848,6 +986,11 @@ struct currency_converter {
 
     auto read_command_line(std::string line) -> void
     {
+        if (!error_strings.empty()) {
+            print_error_strings();
+            return;
+        }
+
         line      = string_to_uppercase(line);
         auto args = string_to_vector(line);
 
@@ -881,6 +1024,11 @@ struct currency_converter {
             } else {
                 print_incorrect_command_usage_string("exit");
             }
+            return;
+        }
+
+        if (args[0] == "FETCHLANG") {
+            fetch_additional_currency_names_language(args);
             return;
         }
 
