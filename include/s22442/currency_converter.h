@@ -26,7 +26,8 @@ struct currency_converter {
     cpr::Url const NBP_URL =
         "api.nbp.pl/api/exchangerates/tables/a?format=json";
     std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
-        {"EN", "openexchangerates.org/api/currencies.json"}};
+        {"EN",
+         "s22442.github.io/nbp_currency_converter_api/currencies_en.json"}};
 
     std::map<std::string, json> const HELP_OBJECTS{
         {"AUTHOR",
@@ -839,7 +840,7 @@ struct currency_converter {
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
 #if defined(__APPLE__) || defined(__unix__) || defined(__unix)
-        table.row(0).set_cell_content_fg_color(fort::color::cyan);
+        table.row(0).set_cell_content_fg_color(fort::color::light_blue);
 #elif defined(_WIN32) || defined(_WIN64)
         table.row(0).set_cell_content_fg_color(fort::color::light_blue);
 #endif
@@ -989,6 +990,12 @@ struct currency_converter {
         if (!error_strings.empty()) {
             print_error_strings();
             return;
+        }
+
+        if (line.find(" && ") != std::string::npos) {
+            auto const etet_index = (int)line.find(" && ");
+            read_command_line(line.substr(0, etet_index));
+            line = line.substr(etet_index + 4, line.size() - etet_index - 3);
         }
 
         line      = string_to_uppercase(line);
