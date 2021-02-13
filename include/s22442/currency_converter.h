@@ -27,7 +27,12 @@ struct currency_converter {
         "api.nbp.pl/api/exchangerates/tables/a?format=json";
     std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
         {"EN",
-         "s22442.github.io/nbp_currency_converter_api/currencies_en.json"}};
+         "openexchangerates.org/api/currencies.json"} /*,
+   {"EN", "s22442.github.io/nbp_currency_converter_api/currencies_en.json"},
+   {"DE", "s22442.github.io/nbp_currency_converter_api/currencies_de.json"},
+   {"RU", "s22442.github.io/nbp_currency_converter_api/currencies_ru.json"},
+   {"JA", "s22442.github.io/nbp_currency_converter_api/currencies_ja.json"}*/
+    };
 
     std::map<std::string, json> const HELP_OBJECTS{
         {"AUTHOR",
