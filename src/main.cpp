@@ -26,7 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <currency_converter.h>
 
 
-auto program_args_to_string(int const argc, char const* argv[]) -> std::string
+auto program_args_to_string(int argc, char* argv[]) -> std::string
 {
     auto str = std::string{""};
 
