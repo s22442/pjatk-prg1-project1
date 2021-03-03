@@ -1,6 +1,6 @@
 # console NBP currency converter
 
-Simple console currency converter for Linux/Windows made as a student project.__
+Simple console currency converter for Linux/Windows made as a student project. <br />
 API used by the application:
 
 - [NBP Web API](http://api.nbp.pl/) (for exchange rates)
