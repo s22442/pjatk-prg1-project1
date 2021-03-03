@@ -27,41 +27,41 @@ make build/main.bin
 
 ## Example commands:
 
-- print the complete list of commands
+- print the complete list of commands:
 
 ```text
 help
 ```
 
-- print publication date of the loaded exchange rates
+- print publication date of the loaded exchange rates:
 
 ```bash
 date
 # 2021-03-03
 ```
 
-- print value of 1 EUR in USD
+- print value of 1 EUR in USD:
 
 ```bash
 eur to usd
 # 1.0000 EUR => 1.2102 USD
 ```
 
-- print value of 10 EUR in USD
+- print value of 10 EUR in USD:
 
 ```bash
 10 eur to usd
 # 10.0000 EUR => 12.1019 USD
 ```
 
-- print value of 10 EUR and 99 RUB in USD
+- print value of 10 EUR and 99 RUB in USD:
 
 ```bash
 10 eur 99 rub to usd
 # 10.0000 EUR + 99.0000 RUB => 13.4453 USD
 ```
 
-- print exchange rate table for the base currency of PLN and the target currencies of JPY, EUR, RUB, USD
+- print exchange rate table for the base currency of PLN and the target currencies of JPY, EUR, RUB, USD:
 
 ```bash
 table pln to jpy eur rub usd
