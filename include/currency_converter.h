@@ -523,7 +523,7 @@ struct currency_converter {
 
     auto print_author() -> void
     {
-        print("Kajetan Welc - s22442\n");
+        print("Kajetan Welc\n");
     }
 
     auto print_help_entry(std::string const& command) -> void
@@ -869,11 +869,7 @@ struct currency_converter {
         table.column(rates_column).set_cell_left_padding(1);
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
-#if defined(__APPLE__) || defined(__unix__) || defined(__unix)
-        table.row(0).set_cell_content_fg_color(fort::color::light_blue);
-#elif defined(_WIN32) || defined(_WIN64)
-        table.row(0).set_cell_content_fg_color(fort::color::light_blue);
-#endif
+        table.row(0).set_cell_content_fg_color(fort::color::yellow);
 
         return table;
     }
