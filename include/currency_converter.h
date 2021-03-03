@@ -1,7 +1,30 @@
-// Author: Kajetan Welc - s22442
+/*
+console NBP currency converter
 
-#ifndef S22442_CURRENCY_CONVERTER_H
-#define S22442_CURRENCY_CONVERTER_H
+MIT License
+
+Copyright (c) 2021 Kajetan Welc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+#ifndef CURRENCY_CONVERTER_H
+#define CURRENCY_CONVERTER_H
 
 #include <cpr/cpr.h>  // https://github.com/whoshuu/cpr
 #include <fort.hpp>   // https://github.com/seleznevae/libfort
@@ -19,8 +42,6 @@
 using json = nlohmann::json;
 
 
-namespace s22442 {
-
 struct currency_converter {
   private:
     cpr::Url const NBP_URL =
@@ -28,10 +49,14 @@ struct currency_converter {
     std::map<std::string, cpr::Url> const CURRENCY_NAMES_URLS{
         {"EN",
          "openexchangerates.org/api/currencies.json"} /*,
-   {"EN", "s22442.github.io/nbp_currency_converter_api/currencies_en.json"},
-   {"DE", "s22442.github.io/nbp_currency_converter_api/currencies_de.json"},
-   {"RU", "s22442.github.io/nbp_currency_converter_api/currencies_ru.json"},
-   {"JA", "s22442.github.io/nbp_currency_converter_api/currencies_ja.json"}*/
+    {"EN",
+    "brofrain.github.io/nbp_currency_converter_api/currency_names/currency_names_en.json"},
+    {"DE",
+    "brofrain.github.io/nbp_currency_converter_api/currency_names/currency_names_de.json"},
+    {"RU",
+    "brofrain.github.io/nbp_currency_converter_api/currency_names/currency_names_ru.json"},
+    {"JA",
+    "brofrain.github.io/nbp_currency_converter_api/currency_names/currency_names_ja.json"}*/
     };
 
     std::map<std::string, json> const HELP_OBJECTS{
@@ -1097,6 +1122,5 @@ struct currency_converter {
         awaits_commands = false;
     }
 };
-}  // namespace s22442
 
 #endif
