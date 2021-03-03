@@ -869,7 +869,7 @@ struct currency_converter {
         table.column(rates_column).set_cell_left_padding(1);
         table.column(rates_column).set_cell_right_padding(1);
         table[0][rates_column].set_cell_text_align(fort::text_align::center);
-        table.row(0).set_cell_content_fg_color(fort::color::yellow);
+        table.row(0).set_cell_content_fg_color(fort::color::light_yellow);
 
         return table;
     }
